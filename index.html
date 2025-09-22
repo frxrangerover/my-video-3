@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>全屏视频播放</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            background-color: #000;
+            color: white;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            overflow: hidden;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        #video-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: #000;
+            z-index: 1;
+        }
+        
+        #myVideo {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        
+        .status-message {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 0, 0, 0.7);
+            padding: 20px 30px;
+            border-radius: 10px;
+            text-align: center;
+            z-index: 2;
+            max-width: 80%;
+        }
+        
+        .status-message h2 {
+            margin-bottom: 15px;
+            color: #ffcc00;
+        }
+        
+        .status-message p {
+            margin-bottom: 10px;
+            line-height: 1.5;
+        }
+        
+        .hidden {
+            display: none;
+        }
+        
+        .loader {
+            width: 48px;
+            height: 48px;
+            border: 5px solid #fff;
+            border-bottom-color: #ff3d00;
+            border-radius: 50%;
+            display: inline-block;
+            animation: rotation 1s linear infinite;
+            margin-bottom: 15px;
+        }
+        
+        @keyframes rotation {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        /* 退出提示（只在需要时显示） */
+        #exitHint {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.5);
+            padding: 10px 15px;
+            border-radius: 5px;
+            font-size: 14px;
+            z-index: 3;
+            opacity: 0;
+            transition: opacity 0.5s;
+        }
+        
+        #exitHint.show {
+            opacity: 1;
+        }
+    </style>
+</head>
+<body>
+    <div id="video-container">
+        <video id="myVideo" playsinline>
+            <source src="your-video.mp4" type="video/mp4">
+            您的浏览器不支持HTML5视频播放
+        </video>
+    </div>
+    
+    <div id="statusMessage" class="status-message">
+        <div class="loader"></div>
+        <h2>正在准备全屏播放</h2>
+        <p>请稍候...</p>
+    </div>
+    
+    <div id="exitHint">按ESC键退出全屏</div>
+
+    <script>
+        const video = document.getElementById('myVideo');
+        const statusMessage = document.getElementById('statusMessage');
+        const exitHint = document.getElementById('exitHint');
+        
+        // 显示状态消息
+        function showStatus(type, message, submessage = '') {
+            statusMessage.innerHTML = '';
+            
+            if (type === 'loading') {
+                statusMessage.innerHTML = `
+                    <div class="loader"></div>
+                    <h2>${message}</h2>
+                    <p>${submessage}</p>
+                `;
+            } else if (type === 'error') {
+                statusMessage.innerHTML = `
+                    <h2 style="color: #ff5252;">${message}</h2>
+                    <p>${submessage}</p>
+                `;
+            }
+            
+            statusMessage.classList.remove('hidden');
+        }
+        
+        // 尝试进入全屏模式
+        function requestFullScreen() {
+            const element = document.documentElement;
+            
+            if (element.requestFullscreen) {
+                return element.requestFullscreen();
+            } else if (element.webkitRequestFullscreen) {
+                return element.webkitRequestFullscreen();
+            } else if (element.msRequestFullscreen) {
+                return element.msRequestFullscreen();
+            } else if (element.mozRequestFullScreen) {
+                return element.mozRequestFullScreen();
+            }
+            
+            return Promise.reject('全屏API不支持');
+        }
+        
+        // 尝试自动播放视频
+        function attemptAutoplay() {
+            // 先尝试静音播放（更可能成功）
+            video.muted = true;
+            const playPromise = video.play();
+            
+            if (playPromise !== undefined) {
+                return playPromise.then(() => {
+                    // 播放成功，尝试取消静音
+                    video.muted = false;
+                    return true;
+                }).catch(error => {
+                    // 静音播放也失败，显示提示
+                    showStatus('error', '自动播放被阻止', '请点击页面任意位置开始播放');
+                    return false;
+                });
+            }
+            
+            return Promise.resolve(false);
+        }
+        
+        // 初始化视频播放
+        async function initVideoPlayback() {
+            try {
+                showStatus('loading', '正在准备全屏播放', '请稍候...');
+                
+                // 先尝试进入全屏
+                await requestFullScreen();
+                
+                // 尝试自动播放
+                const autoplaySuccess = await attemptAutoplay();
+                
+                if (autoplaySuccess) {
+                    // 成功播放，隐藏状态消息
+                    statusMessage.classList.add('hidden');
+                    
+                    // 显示退出提示几秒钟
+                    exitHint.classList.add('show');
+                    setTimeout(() => {
+                        exitHint.classList.remove('show');
+                    }, 3000);
+                }
+                
+            } catch (error) {
+                console.error('初始化失败:', error);
+                showStatus('error', '无法自动全屏播放', '请手动点击视频并选择全屏模式');
+            }
+        }
+        
+        // 页面加载完成后初始化
+        window.addEventListener('load', initVideoPlayback);
+        
+        // 点击页面任意位置尝试播放
+        document.body.addEventListener('click', function() {
+            if (video.paused) {
+                video.play().catch(error => {
+                    showStatus('error', '播放失败', '请检查视频文件或浏览器设置');
+                });
+            }
+        });
+        
+        // ESC键退出全屏时显示提示
+        document.addEventListener('fullscreenchange', function() {
+            if (!document.fullscreenElement) {
+                exitHint.classList.add('show');
+            }
+        });
+        
+        // 视频错误处理
+        video.addEventListener('error', function() {
+            showStatus('error', '视频加载失败', '请检查视频文件路径和格式');
+        });
+        
+        // 视频结束时保持全屏并重新播放（循环播放）
+        video.addEventListener('ended', function() {
+            video.currentTime = 0;
+            video.play();
+        });
+    </script>
+</body>
+</html>
