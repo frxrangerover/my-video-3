@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>伪全屏视频自动播放</title>
+    <title>全屏视频播放</title>
     <style>
         * {
             margin: 0;
@@ -17,7 +17,10 @@
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             overflow: hidden;
             height: 100vh;
-            position: relative;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
         }
         
         #video-container {
@@ -41,27 +44,22 @@
             top: 50%;
             left: 50%;
             transform: translate(-50%, -50%);
-            background: rgba(0, 0, 0, 0.85);
-            padding: 25px 35px;
-            border-radius: 12px;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 20px 30px;
+            border-radius: 10px;
             text-align: center;
             z-index: 2;
-            max-width: 85%;
-            box-shadow: 0 5px 25px rgba(0, 0, 0, 0.5);
-            backdrop-filter: blur(10px);
-            border: 1px solid rgba(255, 255, 255, 0.1);
+            max-width: 80%;
         }
         
         .status-message h2 {
-            margin-bottom: 18px;
+            margin-bottom: 15px;
             color: #ffcc00;
-            font-size: 22px;
         }
         
         .status-message p {
-            margin-bottom: 15px;
-            line-height: 1.6;
-            font-size: 16px;
+            margin-bottom: 10px;
+            line-height: 1.5;
         }
         
         .hidden {
@@ -69,14 +67,14 @@
         }
         
         .loader {
-            width: 50px;
-            height: 50px;
-            border: 5px solid rgba(255, 255, 255, 0.3);
+            width: 48px;
+            height: 48px;
+            border: 5px solid #fff;
             border-bottom-color: #ff3d00;
             border-radius: 50%;
             display: inline-block;
             animation: rotation 1s linear infinite;
-            margin-bottom: 20px;
+            margin-bottom: 15px;
         }
         
         @keyframes rotation {
@@ -84,163 +82,130 @@
             100% { transform: rotate(360deg); }
         }
         
-        .retry-btn {
-            display: inline-block;
-            background: #ff3d00;
-            color: white;
-            padding: 10px 20px;
-            border: none;
-            border-radius: 5px;
-            font-size: 16px;
-            cursor: pointer;
-            margin-top: 15px;
-            transition: background 0.3s;
-        }
-        
-        .retry-btn:hover {
-            background: #ff5722;
-        }
-        
-        /* 轻量级品牌标识 */
-        .brand {
+        /* 退出提示（只在需要时显示） */
+        #exitHint {
             position: fixed;
             bottom: 20px;
-            right: 20px;
-            color: rgba(255, 255, 255, 0.5);
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.5);
+            padding: 10px 15px;
+            border-radius: 5px;
             font-size: 14px;
             z-index: 3;
+            opacity: 0;
+            transition: opacity 0.5s;
         }
         
-        /* 进度指示器 */
-        .progress-bar {
-            position: fixed;
-            bottom: 0;
-            left: 0;
-            width: 100%;
-            height: 3px;
-            background: rgba(255, 255, 255, 0.2);
-            z-index: 3;
-        }
-        
-        .progress-bar-inner {
-            height: 100%;
-            width: 0%;
-            background: #ff3d00;
-            transition: width 0.3s;
+        #exitHint.show {
+            opacity: 1;
         }
     </style>
 </head>
 <body>
     <div id="video-container">
-        <video id="myVideo" playsinline muted loop>
-            <source src="https://assets.codepen.io/3364143/sample.mp4" type="video/mp4">
+        <video id="myVideo" playsinline>
+            <source src="your-video.mp4" type="video/mp4">
             您的浏览器不支持HTML5视频播放
         </video>
     </div>
     
-    <div class="progress-bar">
-        <div class="progress-bar-inner" id="progressBar"></div>
-    </div>
-    
     <div id="statusMessage" class="status-message">
         <div class="loader"></div>
-        <h2>正在准备播放</h2>
-        <p>视频加载中，请稍候...</p>
+        <h2>正在准备全屏播放</h2>
+        <p>请稍候...</p>
     </div>
     
-    <div class="brand">沉浸式体验</div>
+    <div id="exitHint">按ESC键退出全屏</div>
 
     <script>
         const video = document.getElementById('myVideo');
         const statusMessage = document.getElementById('statusMessage');
-        const progressBar = document.getElementById('progressBar');
+        const exitHint = document.getElementById('exitHint');
         
         // 显示状态消息
         function showStatus(type, message, submessage = '') {
-            let html = '';
+            statusMessage.innerHTML = '';
             
             if (type === 'loading') {
-                html = `
+                statusMessage.innerHTML = `
                     <div class="loader"></div>
                     <h2>${message}</h2>
                     <p>${submessage}</p>
                 `;
             } else if (type === 'error') {
-                html = `
-                    <h2>${message}</h2>
-                    <p>${submessage}</p>
-                    <button class="retry-btn" onclick="initVideoPlayback()">重试播放</button>
-                `;
-            } else if (type === 'success') {
-                html = `
-                    <h2 style="color: #4caf50;">${message}</h2>
+                statusMessage.innerHTML = `
+                    <h2 style="color: #ff5252;">${message}</h2>
                     <p>${submessage}</p>
                 `;
-                // 2秒后隐藏成功消息
-                setTimeout(() => {
-                    statusMessage.classList.add('hidden');
-                }, 2000);
             }
             
-            statusMessage.innerHTML = html;
             statusMessage.classList.remove('hidden');
         }
         
-        // 更新进度条
-        function updateProgressBar() {
-            if (video.duration > 0) {
-                const percent = (video.currentTime / video.duration) * 100;
-                progressBar.style.width = percent + '%';
+        // 尝试进入全屏模式
+        function requestFullScreen() {
+            const element = document.documentElement;
+            
+            if (element.requestFullscreen) {
+                return element.requestFullscreen();
+            } else if (element.webkitRequestFullscreen) {
+                return element.webkitRequestFullscreen();
+            } else if (element.msRequestFullscreen) {
+                return element.msRequestFullscreen();
+            } else if (element.mozRequestFullScreen) {
+                return element.mozRequestFullScreen();
             }
-        }
-        
-        // 初始化视频播放
-        function initVideoPlayback() {
-            try {
-                showStatus('loading', '正在准备播放', '视频加载中，请稍候...');
-                
-                // 设置视频为静音（提高自动播放成功率）
-                video.muted = true;
-                
-                // 监听视频加载进度
-                video.addEventListener('progress', function() {
-                    if (video.buffered.length > 0) {
-                        const bufferedEnd = video.buffered.end(video.buffered.length - 1);
-                        const duration = video.duration;
-                        if (duration > 0) {
-                            const percent = (bufferedEnd / duration) * 100;
-                            if (percent > 50) { // 当缓冲超过50%时尝试播放
-                                attemptAutoplay();
-                            }
-                        }
-                    }
-                });
-                
-                // 尝试立即播放
-                attemptAutoplay();
-                
-            } catch (error) {
-                console.error('初始化失败:', error);
-                showStatus('error', '视频播放失败', '请检查视频文件或刷新页面');
-            }
+            
+            return Promise.reject('全屏API不支持');
         }
         
         // 尝试自动播放视频
         function attemptAutoplay() {
+            // 先尝试静音播放（更可能成功）
+            video.muted = true;
             const playPromise = video.play();
             
             if (playPromise !== undefined) {
-                playPromise.then(() => {
-                    // 播放成功
-                    showStatus('success', '播放开始', '视频正在全屏播放中');
-                    
-                    // 设置进度更新
-                    video.addEventListener('timeupdate', updateProgressBar);
+                return playPromise.then(() => {
+                    // 播放成功，尝试取消静音
+                    video.muted = false;
+                    return true;
                 }).catch(error => {
-                    // 自动播放失败
-                    console.error('自动播放失败:', error);
+                    // 静音播放也失败，显示提示
                     showStatus('error', '自动播放被阻止', '请点击页面任意位置开始播放');
+                    return false;
                 });
+            }
+            
+            return Promise.resolve(false);
+        }
+        
+        // 初始化视频播放
+        async function initVideoPlayback() {
+            try {
+                showStatus('loading', '正在准备全屏播放', '请稍候...');
+                
+                // 先尝试进入全屏
+                await requestFullScreen();
+                
+                // 尝试自动播放
+                const autoplaySuccess = await attemptAutoplay();
+                
+                if (autoplaySuccess) {
+                    // 成功播放，隐藏状态消息
+                    statusMessage.classList.add('hidden');
+                    
+                    // 显示退出提示几秒钟
+                    exitHint.classList.add('show');
+                    setTimeout(() => {
+                        exitHint.classList.remove('show');
+                    }, 3000);
+                }
+                
+            } catch (error) {
+                console.error('初始化失败:', error);
+                showStatus('error', '无法自动全屏播放', '请手动点击视频并选择全屏模式');
             }
         }
         
@@ -250,12 +215,16 @@
         // 点击页面任意位置尝试播放
         document.body.addEventListener('click', function() {
             if (video.paused) {
-                video.play().then(() => {
-                    statusMessage.classList.add('hidden');
-                    video.addEventListener('timeupdate', updateProgressBar);
-                }).catch(error => {
+                video.play().catch(error => {
                     showStatus('error', '播放失败', '请检查视频文件或浏览器设置');
                 });
+            }
+        });
+        
+        // ESC键退出全屏时显示提示
+        document.addEventListener('fullscreenchange', function() {
+            if (!document.fullscreenElement) {
+                exitHint.classList.add('show');
             }
         });
         
@@ -264,17 +233,10 @@
             showStatus('error', '视频加载失败', '请检查视频文件路径和格式');
         });
         
-        // 视频结束时重新播放（循环播放）
+        // 视频结束时保持全屏并重新播放（循环播放）
         video.addEventListener('ended', function() {
             video.currentTime = 0;
             video.play();
-        });
-        
-        // 视频开始播放时隐藏状态消息
-        video.addEventListener('play', function() {
-            setTimeout(() => {
-                statusMessage.classList.add('hidden');
-            }, 1000);
         });
     </script>
 </body>
